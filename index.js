@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion } = require('mongodb');
 require('dotenv').config();
 const app = express();
@@ -11,6 +12,7 @@ app.use(cors({
         'http://localhost:5173',
     ],
 }));
+// middleware
 app.use(express.json());
 
 
@@ -32,7 +34,30 @@ async function run() {
         // Connect the client to the server	(optional starting in v4.7)
         await client.connect();
         const userCollection = client.db('parcel-pro').collection('user')
+        const bookingParcelsCollection = client.db('parcel-pro').collection('parcels')
 
+        // jwt related api ---------------------
+         app.post('/jwt', async(req,res) => {
+            const user = req.body;
+            const token = jwt.sign(user , process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'});
+            res.send({ token })
+        })
+        // middlewares
+        const verifyToken = (req,res,next) => {
+            console.log('inside verify token',req.headers.authorization);
+            if(!req.headers.authorization){
+                return res.status(401).send({message: 'forbidden access'});
+            }
+            const token = req.headers.authorization.split(' ')[1]
+            jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+                if(err){
+                    return res.status(401).send({message: 'forbidden access'}); 
+                }
+                req.decoded = decoded;
+                next();
+            })
+           
+        }
         // user related api------------------------
         app.post('/users', async(req, res) => {
             const user = req.body;
@@ -44,7 +69,25 @@ async function run() {
             const result = await userCollection.insertOne(user);
             res.send(result);
         })
+        //  get use info from db-----------------
+        app.get('/users/:email', async(req,res) => {
+            const email = req.params.email;
+            const result = await userCollection.findOne({ email })
+            res.send(result)
+        })
 
+        // booking parcels data save db-------------
+        app.post('/parcels', async(req,res) => {
+            const parcel = req.body;
+            const result = await bookingParcelsCollection.insertOne(parcel);
+            res.send(result);
+        })
+        //  single man parcels --------------
+        app.get('/parcels/:email', async(req,res) => {
+            const email = req.params.email
+            const result = await bookingParcelsCollection.find({ email }).toArray()
+            res.send(result)
+        })
 
 
 
