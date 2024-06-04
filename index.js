@@ -37,65 +37,88 @@ async function run() {
         const bookingParcelsCollection = client.db('parcel-pro').collection('parcels')
 
         // jwt related api ---------------------
-         app.post('/jwt', async(req,res) => {
+        app.post('/jwt', async (req, res) => {
             const user = req.body;
-            const token = jwt.sign(user , process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'});
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
             res.send({ token })
         })
         // middlewares
-        const verifyToken = (req,res,next) => {
-            console.log('inside verify token',req.headers.authorization);
-            if(!req.headers.authorization){
-                return res.status(401).send({message: 'forbidden access'});
+        const verifyToken = (req, res, next) => {
+            console.log('inside verify token', req.headers.authorization);
+            if (!req.headers.authorization) {
+                return res.status(401).send({ message: 'forbidden access' });
             }
             const token = req.headers.authorization.split(' ')[1]
             jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-                if(err){
-                    return res.status(401).send({message: 'forbidden access'}); 
+                if (err) {
+                    return res.status(401).send({ message: 'forbidden access' });
                 }
                 req.decoded = decoded;
                 next();
             })
-           
+
         }
         // user related api------------------------
-        app.post('/users', async(req, res) => {
+        app.post('/users', verifyToken, async (req, res) => {
             const user = req.body;
-            const query = {email: user.email}
+            const query = { email: user.email }
             const exitingUser = await userCollection.findOne(query);
-            if(exitingUser){
-                return res.send({message: 'user already exits', insertedId: null})
+            if (exitingUser) {
+                return res.send({ message: 'user already exits', insertedId: null })
             }
             const result = await userCollection.insertOne(user);
             res.send(result);
         })
         //  get use info from db-----------------
-        app.get('/users/:email', async(req,res) => {
+        app.get('/users/:email', async (req, res) => {
             const email = req.params.email;
             const result = await userCollection.findOne({ email })
             res.send(result)
         })
 
         // booking parcels data save db-------------
-        app.post('/parcels', async(req,res) => {
+        app.post('/parcels', async (req, res) => {
             const parcel = req.body;
             const result = await bookingParcelsCollection.insertOne(parcel);
             res.send(result);
         })
         //  single man parcels --------------
-        app.get('/parcels/:email', async(req,res) => {
+        app.get('/parcels/:email', verifyToken, async (req, res) => {
             const email = req.params.email
             const result = await bookingParcelsCollection.find({ email }).toArray()
             res.send(result)
         })
-        // update single parcel------------
-        app.get('/parcel/:id', async(req,res) => {
+        // get single parcel by id------------
+        app.get('/parcel/:id', async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)};
+            const query = { _id: new ObjectId(id) };
             const result = await bookingParcelsCollection.findOne(query);
             res.send(result)
         })
-
+        // updated single parcel----------------
+        app.put('/bookingParcel/:id', verifyToken, async (req, res) => {
+            const id = req.params.id
+            const item = req.body;
+            const query = { _id: new ObjectId(id) };
+            const options = { upsert: true };
+            const updatedDoc = {
+                $set: {
+                    phone: item.phone,
+                    parcelType: item.parcelType,
+                    parcelWeight: item.parcelWeight,
+                    receiverName: item.receiverName,
+                    receiverPhone: item.receiverPhone,
+                    deliveryAddress: item.deliveryAddress,
+                    deliveryDate: item.deliveryDate,
+                    deliveryLatitude: item.deliveryLatitude,
+                    deliveryLongitude: item.deliveryLongitude,
+                    parcelPrice: item.parcelPrice,
+                    bookingDate: Date.now()
+                }
+            }
+            const result = await bookingParcelsCollection.updateOne(query,updatedDoc,options);
+            res.send(result)
+        })
 
 
 
