@@ -10,6 +10,7 @@ const port = process.env.PORT || 5000;
 app.use(cors({
     origin: [
         'http://localhost:5173',
+        'http://localhost:5174'
     ],
 }));
 // middleware
@@ -139,14 +140,14 @@ async function run() {
             res.send(result)
         })
         // get all delivery men--------------only see admin----------
-        app.get('/allDeliveryMens', async (req, res) => {
+        app.get('/allDeliveryMens',verifyToken, async (req, res) => {
             const query = { role: 'deliverymen' }
             console.log(query);
             const result = await userCollection.find(query).toArray();
             res.send(result)
         })
         // parcels assign--------only admin see-----------------
-        app.patch('/assignParcels/:id', async (req, res) => {
+        app.patch('/assignParcels/:id',verifyToken, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const item = req.body;
@@ -158,7 +159,7 @@ async function run() {
             res.send(result)
         })
         // all parcels searching system---------only admin------------
-        app.get('/allParcels', async (req, res) => {
+        app.get('/allParcels', verifyToken, async (req, res) => {
             const startDate = new Date(req.query.startDate);
             const endDate = new Date(req.query.endDate);
             console.log(startDate, endDate);
@@ -168,7 +169,42 @@ async function run() {
             console.log(result);
             res.send(result)
         })
-
+        // get all users in admin dashboard -----------only admin see---------
+        app.get('/allUsers',verifyToken, async(req,res) => {
+            const users = req.body;
+            const result = await userCollection.find(users).toArray();
+            res.send(result)
+        })
+        // book parcel and totalSpent update in user collection*******************
+        app.patch('/updateUser', async(req,res) => {
+            const parcel = req.body;
+            const query = {email: parcel.email }
+            const updatedDoc = {
+                $inc: { parcelBooked: 1, totalSpent: parcel.parcelPrice}
+            }
+            const result = await userCollection.updateOne(query,updatedDoc);
+            res.send(result)
+        })
+        // make delivery men -----------------only admin ---
+        app.patch('/makeDeliverymen/:id', async(req,res) => {
+            const id = req.params.id;
+            const query = {_id: new ObjectId(id)};
+            const updatedDoc ={
+                $set: { role: 'deliverymen'}
+            }
+            const result = await userCollection.updateOne(query,updatedDoc);
+            res.send(result)
+        })
+         // make admin  -----------------only admin ---
+         app.patch('/makeAdmin/:id', async(req,res) => {
+            const id = req.params.id;
+            const query = {_id: new ObjectId(id)};
+            const updatedDoc ={
+                $set: { role: 'admin'}
+            }
+            const result = await userCollection.updateOne(query,updatedDoc);
+            res.send(result)
+        })
 
 
 
