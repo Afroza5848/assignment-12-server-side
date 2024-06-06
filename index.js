@@ -59,7 +59,7 @@ async function run() {
 
         }
         // user related api------------------------
-        app.post('/users',  async (req, res) => {
+        app.post('/users', async (req, res) => {
             const user = req.body;
             const query = { email: user.email }
             const exitingUser = await userCollection.findOne(query);
@@ -83,7 +83,7 @@ async function run() {
             res.send(result);
         })
         // all parcels get----------only admin see ------------------
-        app.get('/parcels', verifyToken, async(req,res) => {
+        app.get('/parcels', verifyToken, async (req, res) => {
             const parcels = req.body;
             const result = await bookingParcelsCollection.find(parcels).toArray();
             res.send(result)
@@ -123,38 +123,49 @@ async function run() {
                     bookingDate: Date.now()
                 }
             }
-            const result = await bookingParcelsCollection.updateOne(query,updatedDoc,options);
+            const result = await bookingParcelsCollection.updateOne(query, updatedDoc, options);
             res.send(result)
         })
         // delete booking parcel by login user
-        app.patch('/parcels/:id',verifyToken, async(req,res) => {
+        app.patch('/parcels/:id', verifyToken, async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)};
+            const query = { _id: new ObjectId(id) };
             const status = req.body;
             console.log(status);
             const updatedDoc = {
-                $set: {status: 'canceled'} 
+                $set: { status: 'canceled' }
             }
-            const result = await bookingParcelsCollection.updateOne(query,updatedDoc);
+            const result = await bookingParcelsCollection.updateOne(query, updatedDoc);
             res.send(result)
         })
         // get all delivery men--------------only see admin----------
-        app.get('/allDeliveryMens', async(req,res) => {
-            const query = {role : 'deliverymen'}
+        app.get('/allDeliveryMens', async (req, res) => {
+            const query = { role: 'deliverymen' }
             console.log(query);
             const result = await userCollection.find(query).toArray();
             res.send(result)
         })
         // parcels assign--------only admin see-----------------
-        app.patch('/assignParcels/:id', async(req,res) => {
+        app.patch('/assignParcels/:id', async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)};
+            const query = { _id: new ObjectId(id) };
             const item = req.body;
             console.log(item);
             const updatedDoc = {
-                $set: {deliverymenId: item.deliverymenId, approximateDeliveryDate:item.approximateDeliveryDate, status: 'On The Way'}
+                $set: { deliverymenId: item.deliverymenId, approximateDeliveryDate: item.approximateDeliveryDate, status: 'On The Way' }
             }
-            const result = await bookingParcelsCollection.updateOne(query,updatedDoc);
+            const result = await bookingParcelsCollection.updateOne(query, updatedDoc);
+            res.send(result)
+        })
+        // all parcels searching system---------only admin------------
+        app.get('/allParcels', async (req, res) => {
+            const startDate = new Date(req.query.startDate);
+            const endDate = new Date(req.query.endDate);
+            console.log(startDate, endDate);
+            const query = { deliveryDate: { '$gte': startDate, '$lte': endDate } };
+            console.log(query);
+            const result = await bookingParcelsCollection.find(query).toArray();
+            console.log(result);
             res.send(result)
         })
 
