@@ -36,6 +36,7 @@ async function run() {
         await client.connect();
         const userCollection = client.db('parcel-pro').collection('user')
         const bookingParcelsCollection = client.db('parcel-pro').collection('parcels')
+        const reviewCollection = client.db('parcel-pro').collection('review')
 
         // jwt related api ---------------------
         app.post('/jwt', async (req, res) => {
@@ -45,7 +46,7 @@ async function run() {
         })
         // middlewares
         const verifyToken = (req, res, next) => {
-            console.log('inside verify token', req.headers.authorization);
+            //console.log('inside verify token', req.headers.authorization);
             if (!req.headers.authorization) {
                 return res.status(401).send({ message: 'forbidden access' });
             }
@@ -132,7 +133,6 @@ async function run() {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const status = req.body;
-            console.log(status);
             const updatedDoc = {
                 $set: { status: 'canceled' }
             }
@@ -142,7 +142,6 @@ async function run() {
         // get all delivery men--------------only see admin----------
         app.get('/allDeliveryMens',verifyToken, async (req, res) => {
             const query = { role: 'deliverymen' }
-            console.log(query);
             const result = await userCollection.find(query).toArray();
             res.send(result)
         })
@@ -151,11 +150,13 @@ async function run() {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const item = req.body;
-            console.log(item);
+            
             const updatedDoc = {
-                $set: { deliverymenId: item.deliverymenId, approximateDeliveryDate: item.approximateDeliveryDate, status: 'On The Way' }
+                $set: {deliverymenId: item.deliverymenId, approximateDeliveryDate: item.approximateDeliveryDate, status: 'On The Way' }
             }
+            console.log(item);
             const result = await bookingParcelsCollection.updateOne(query, updatedDoc);
+            console.log(result);
             res.send(result)
         })
         // all parcels searching system---------only admin------------
@@ -204,6 +205,13 @@ async function run() {
             }
             const result = await userCollection.updateOne(query,updatedDoc);
             res.send(result)
+        })
+
+        // submit review -----------------only user-------
+        app.post('/review', async(req,res) => {
+            const review = req.body;
+            const result = await reviewCollection.insertOne(review);
+            res.send(result);
         })
 
 
