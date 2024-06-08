@@ -168,8 +168,8 @@ async function run() {
         })
         // all parcels searching system---------only admin------------
         app.get('/allParcels', verifyToken, async (req, res) => {
-            const startDate = new Date(req.query.startDate);
-            const endDate = new Date(req.query.endDate);
+            const startDate = req.query.startDate;
+            const endDate = req.query.endDate;
             console.log(startDate, endDate);
             const query = { deliveryDate: { '$gte': startDate, '$lte': endDate } };
             console.log(query);
@@ -241,7 +241,52 @@ async function run() {
             const count = await userCollection.estimatedDocumentCount();
             res.send({ count })
         })
-
+        // $$$$$$$$$$$$$$$$$$$$$$$delivery men$$$$$$$$$$$$$$$$$$$$
+        // my delivery list ----------------only delivery men see
+        app.get('/myDeliveryList/:email', async(req,res) => {
+            const email = req.params.email;
+            const query = {email: email};
+            const user = await userCollection.findOne(query);
+            const stringId = new ObjectId(user?._id).toString()
+            const exist = {deliverymenId: stringId, status: 'On The Way'}
+            const result = await bookingParcelsCollection.find(exist).toArray();
+            res.send(result);
+        })
+        //  update status delivered from deliverymen--------------------only deliverymen see--
+        app.patch('/updateDeliver/:id', async(req,res) => {
+            const id = req.params.id;
+            const query = {_id: new ObjectId(id)};
+            const updatedDoc ={
+                $set: {
+                    status: 'Delivered'
+                }
+            }
+            const result = await bookingParcelsCollection.updateOne(query,updatedDoc);
+            res.send(result);
+        })
+        // number of delivered count---------------only deliverymen
+        app.patch('/numDelivered/:email', async(req,res) => {
+            const email = req.params.email;
+            const query = {email: email};
+            const updatedDoc ={
+                $inc: {parcelDelivered: 1}
+            }
+            const result = await userCollection.updateOne(query,updatedDoc);
+            console.log(result);
+            res.send(result);
+        })
+         //  update status canceled from deliverymen--------------------only deliverymen see--
+         app.patch('/cancelParcel/:id', async(req,res) => {
+            const id = req.params.id;
+            const query = {_id: new ObjectId(id)};
+            const updatedDoc ={
+                $set: {
+                    status: 'Canceled'
+                }
+            }
+            const result = await bookingParcelsCollection.updateOne(query,updatedDoc);
+            res.send(result);
+        })
 
 
         // Send a ping to confirm a successful connection
