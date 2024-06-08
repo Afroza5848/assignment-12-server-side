@@ -162,7 +162,7 @@ async function run() {
 
             }
             console.log(item);
-            const result = await bookingParcelsCollection.updateOne(query, updatedDoc, {upsert: true});
+            const result = await bookingParcelsCollection.updateOne(query, updatedDoc, { upsert: true });
             console.log(result);
             res.send(result)
         })
@@ -179,8 +179,10 @@ async function run() {
         })
         // get all users in admin dashboard -----------only admin see---------
         app.get('/allUsers', verifyToken, async (req, res) => {
+            const page = parseInt(req.query.page);
+            const size = parseInt(req.query.size);
             const users = req.body;
-            const result = await userCollection.find(users).toArray();
+            const result = await userCollection.find(users).skip(page * size).limit(size).toArray();
             res.send(result)
         })
         // book parcel and totalSpent update in user collection*******************
@@ -233,6 +235,11 @@ async function run() {
             res.send({
                 clientSecret: paymentIntent.client_secret,
             });
+        })
+        // total count of user for create pagination
+        app.get('/totalCount', async (req, res) => {
+            const count = await userCollection.estimatedDocumentCount();
+            res.send({ count })
         })
 
 
