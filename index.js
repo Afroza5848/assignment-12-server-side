@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
 require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 5000;
@@ -38,15 +39,15 @@ async function run() {
         const bookingParcelsCollection = client.db('parcel-pro').collection('parcels')
         const reviewCollection = client.db('parcel-pro').collection('review')
 
-        // jwt related api ---------------------
+        // jwt related api -----------------------
         app.post('/jwt', async (req, res) => {
             const user = req.body;
-            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '2d' });
             res.send({ token })
         })
         // middlewares
         const verifyToken = (req, res, next) => {
-            //console.log('inside verify token', req.headers.authorization);
+            console.log('inside verify token', req.headers.authorization);
             if (!req.headers.authorization) {
                 return res.status(401).send({ message: 'forbidden access' });
             }
@@ -140,22 +141,28 @@ async function run() {
             res.send(result)
         })
         // get all delivery men--------------only see admin----------
-        app.get('/allDeliveryMens',verifyToken, async (req, res) => {
+        app.get('/allDeliveryMens', verifyToken, async (req, res) => {
             const query = { role: 'deliverymen' }
             const result = await userCollection.find(query).toArray();
             res.send(result)
         })
         // parcels assign--------only admin see-----------------
-        app.patch('/assignParcels/:id',verifyToken, async (req, res) => {
+        app.patch('/assignParcels/:id', verifyToken, async (req, res) => {
             const id = req.params.id;
+            console.log(id);
             const query = { _id: new ObjectId(id) };
             const item = req.body;
-            
+            console.log('item', item);
             const updatedDoc = {
-                $set: {deliverymenId: item.deliverymenId, approximateDeliveryDate: item.approximateDeliveryDate, status: 'On The Way' }
+
+                $set: {
+                    deliverymenId: item.deliverymenId, approximateDeliveryDate: item.approximateDeliveryDate,
+                    status: 'On The Way'
+                },
+
             }
             console.log(item);
-            const result = await bookingParcelsCollection.updateOne(query, updatedDoc);
+            const result = await bookingParcelsCollection.updateOne(query, updatedDoc, {upsert: true});
             console.log(result);
             res.send(result)
         })
@@ -171,49 +178,62 @@ async function run() {
             res.send(result)
         })
         // get all users in admin dashboard -----------only admin see---------
-        app.get('/allUsers',verifyToken, async(req,res) => {
+        app.get('/allUsers', verifyToken, async (req, res) => {
             const users = req.body;
             const result = await userCollection.find(users).toArray();
             res.send(result)
         })
         // book parcel and totalSpent update in user collection*******************
-        app.patch('/updateUser', async(req,res) => {
+        app.patch('/updateUser', async (req, res) => {
             const parcel = req.body;
-            const query = {email: parcel.email }
+            const query = { email: parcel.email }
             const updatedDoc = {
-                $inc: { parcelBooked: 1, totalSpent: parcel.parcelPrice}
+                $inc: { parcelBooked: 1, totalSpent: parcel.parcelPrice }
             }
-            const result = await userCollection.updateOne(query,updatedDoc);
+            const result = await userCollection.updateOne(query, updatedDoc);
             res.send(result)
         })
         // make delivery men -----------------only admin ---
-        app.patch('/makeDeliverymen/:id', async(req,res) => {
+        app.patch('/makeDeliverymen/:id', async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)};
-            const updatedDoc ={
-                $set: { role: 'deliverymen'}
+            const query = { _id: new ObjectId(id) };
+            const updatedDoc = {
+                $set: { role: 'deliverymen' }
             }
-            const result = await userCollection.updateOne(query,updatedDoc);
+            const result = await userCollection.updateOne(query, updatedDoc);
             res.send(result)
         })
-         // make admin  -----------------only admin ---
-         app.patch('/makeAdmin/:id', async(req,res) => {
+        // make admin  -----------------only admin ---
+        app.patch('/makeAdmin/:id', async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)};
-            const updatedDoc ={
-                $set: { role: 'admin'}
+            const query = { _id: new ObjectId(id) };
+            const updatedDoc = {
+                $set: { role: 'admin' }
             }
-            const result = await userCollection.updateOne(query,updatedDoc);
+            const result = await userCollection.updateOne(query, updatedDoc);
             res.send(result)
         })
 
         // submit review -----------------only user-------
-        app.post('/review', async(req,res) => {
+        app.post('/review', async (req, res) => {
             const review = req.body;
             const result = await reviewCollection.insertOne(review);
             res.send(result);
         })
-
+        // payment intent--------------------
+        app.post('/create-payment-intent', async (req, res) => {
+            const { parcelPrice } = req.body
+            const amount = parseInt(parcelPrice * 100)
+            console.log(amount)
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: 'usd',
+                payment_method_types: ['card']
+            })
+            res.send({
+                clientSecret: paymentIntent.client_secret,
+            });
+        })
 
 
 
