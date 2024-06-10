@@ -241,51 +241,120 @@ async function run() {
             const count = await userCollection.estimatedDocumentCount();
             res.send({ count })
         })
+        // average review for all deliverymen------------------only admin
+        app.patch('/average-review/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            console.log(query);
+            const rating = req.body;
+            console.log(rating);
+            const updatedDoc = {
+                $inc: { ratingNumber: 1, totalRating: { rating } }
+            }
+            const result = await userCollection.updateOne(query, updatedDoc)
+            console.log(result);
+            res.send(result)
+        })
+
         // $$$$$$$$$$$$$$$$$$$$$$$delivery men$$$$$$$$$$$$$$$$$$$$
         // my delivery list ----------------only delivery men see
-        app.get('/myDeliveryList/:email', async(req,res) => {
+        app.get('/myDeliveryList/:email', async (req, res) => {
             const email = req.params.email;
-            const query = {email: email};
+            const query = { email: email };
             const user = await userCollection.findOne(query);
             const stringId = new ObjectId(user?._id).toString()
-            const exist = {deliverymenId: stringId, status: 'On The Way'}
+            const exist = { deliverymenId: stringId, status: 'On The Way' }
             const result = await bookingParcelsCollection.find(exist).toArray();
             res.send(result);
         })
         //  update status delivered from deliverymen--------------------only deliverymen see--
-        app.patch('/updateDeliver/:id', async(req,res) => {
+        app.patch('/updateDeliver/:id', async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)};
-            const updatedDoc ={
+            const query = { _id: new ObjectId(id) };
+            const updatedDoc = {
                 $set: {
                     status: 'Delivered'
                 }
             }
-            const result = await bookingParcelsCollection.updateOne(query,updatedDoc);
+            const result = await bookingParcelsCollection.updateOne(query, updatedDoc);
             res.send(result);
         })
         // number of delivered count---------------only deliverymen
-        app.patch('/numDelivered/:email', async(req,res) => {
+        app.patch('/numDelivered/:email', async (req, res) => {
             const email = req.params.email;
-            const query = {email: email};
-            const updatedDoc ={
-                $inc: {parcelDelivered: 1}
+            const query = { email: email };
+            const updatedDoc = {
+                $inc: { parcelDelivered: 1 }
             }
-            const result = await userCollection.updateOne(query,updatedDoc);
+            const result = await userCollection.updateOne(query, updatedDoc);
             console.log(result);
             res.send(result);
         })
-         //  update status canceled from deliverymen--------------------only deliverymen see--
-         app.patch('/cancelParcel/:id', async(req,res) => {
+        //  update status canceled from deliverymen--------------------only deliverymen see--
+        app.patch('/cancelParcel/:id', async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)};
-            const updatedDoc ={
+            const query = { _id: new ObjectId(id) };
+            const updatedDoc = {
                 $set: {
                     status: 'Canceled'
                 }
             }
-            const result = await bookingParcelsCollection.updateOne(query,updatedDoc);
+            const result = await bookingParcelsCollection.updateOne(query, updatedDoc);
             res.send(result);
+        })
+        // my review -------------------only delivery men
+        app.get('/myReview/:email', async (req, res) => {
+            const email = req.params.email;
+            const query = { email: email };
+            const user = await userCollection.findOne(query);
+            const stringId = new ObjectId(user?._id).toString()
+            const exist = { deliverymenId: stringId }
+            const result = await reviewCollection.find(exist).toArray();
+            res.send(result);
+        })
+        // homepage-----------------------------------
+        app.get('/total-all', async (req, res) => {
+            const totalParcelBooked = await bookingParcelsCollection.estimatedDocumentCount();
+            const totalParcelDelivered = await bookingParcelsCollection.countDocuments({ status: 'Delivered' });
+            const totalUsers = await userCollection.estimatedDocumentCount();
+            res.send({
+                totalParcelBooked,
+                totalParcelDelivered,
+                totalUsers
+            })
+        })
+        // top deliverymen------------------------
+        app.get('/top-deliverymen', async (req, res) => {
+            const deliveryMen = await userCollection.find({ role: 'deliverymen' }).toArray();
+
+            // Fetch all reviews
+            const reviews = await reviewCollection.find({}).toArray();
+            console.log(reviews);
+            // Map to store delivery men data
+            const deliveryMenData = deliveryMen.map(deliveryMan => {
+                const deliveryManReviews = reviews.filter(review => review.deliverymenId === deliveryMan._id.toString());
+                const parcelDelivered = deliveryManReviews.length;
+                const averageRating = deliveryManReviews.reduce((sum, review) => sum + review.rating, 0) 
+                return {
+                    _id: deliveryMan._id,
+                    name: deliveryMan.name,
+                    image: deliveryMan.image,
+                    parcelDelivered,
+                    averageRating
+                };
+            });
+
+            // Sort and limit the result
+            const topDeliveryMen = deliveryMenData
+                .sort((a, b) => {
+                    if (b.parcelDelivered === a.parcelDelivered) {
+                        return b.averageRating - a.averageRating;
+                    }
+                    return b.parcelDelivered - a.parcelDelivered;
+                })
+                .slice(0, 3);
+
+            res.send(topDeliveryMen);
         })
 
 
