@@ -1,9 +1,10 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
-require('dotenv').config();
+
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -11,7 +12,9 @@ const port = process.env.PORT || 5000;
 app.use(cors({
     origin: [
         'http://localhost:5173',
-        'http://localhost:5174'
+        'http://localhost:5174',
+        'https://parcel-pro-server-ten.vercel.app',
+
     ],
 }));
 // middleware
@@ -34,7 +37,7 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        //await client.connect();
         const userCollection = client.db('parcel-pro').collection('user')
         const bookingParcelsCollection = client.db('parcel-pro').collection('parcels')
         const reviewCollection = client.db('parcel-pro').collection('review')
@@ -61,6 +64,28 @@ async function run() {
             })
 
         }
+        // verify admin
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email: email }
+            const user = await userCollection.findOne(query)
+            const isAdmin = user?.role === 'admin';
+            if (!isAdmin) {
+                return res.status(403).send({ message: "forbidden access" });
+            }
+            next()
+        }
+        // verify deliverymen
+        const verifyDeliverymen = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email: email }
+            const user = await userCollection.findOne(query)
+            const isDeliverymen = user?.role === 'deliverymen';
+            if (!isDeliverymen) {
+                return res.status(403).send({ message: "forbidden access" });
+            }
+            next()
+        }
         // user related api------------------------
         app.post('/users', async (req, res) => {
             const user = req.body;
@@ -80,13 +105,13 @@ async function run() {
         })
 
         // booking parcels data save db-------------
-        app.post('/parcels', async (req, res) => {
+        app.post('/parcels', verifyToken, async (req, res) => {
             const parcel = req.body;
             const result = await bookingParcelsCollection.insertOne(parcel);
             res.send(result);
         })
         // all parcels get----------only admin see ------------------
-        app.get('/parcels', verifyToken, async (req, res) => {
+        app.get('/parcels', verifyToken, verifyAdmin, async (req, res) => {
             const parcels = req.body;
             const result = await bookingParcelsCollection.find(parcels).toArray();
             res.send(result)
@@ -99,7 +124,7 @@ async function run() {
             res.send(result)
         })
         // get single parcel by id------------
-        app.get('/parcel/:id', async (req, res) => {
+        app.get('/parcel/:id', verifyToken, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await bookingParcelsCollection.findOne(query);
@@ -141,13 +166,13 @@ async function run() {
             res.send(result)
         })
         // get all delivery men--------------only see admin----------
-        app.get('/allDeliveryMens', verifyToken, async (req, res) => {
+        app.get('/allDeliveryMens', verifyToken, verifyAdmin, async (req, res) => {
             const query = { role: 'deliverymen' }
             const result = await userCollection.find(query).toArray();
             res.send(result)
         })
         // parcels assign--------only admin see-----------------
-        app.patch('/assignParcels/:id', verifyToken, async (req, res) => {
+        app.patch('/assignParcels/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             console.log(id);
             const query = { _id: new ObjectId(id) };
@@ -167,7 +192,7 @@ async function run() {
             res.send(result)
         })
         // all parcels searching system---------only admin------------
-        app.get('/allParcels', verifyToken, async (req, res) => {
+        app.get('/allParcels', verifyToken, verifyAdmin, async (req, res) => {
             const startDate = req.query.startDate;
             const endDate = req.query.endDate;
             console.log(startDate, endDate);
@@ -178,7 +203,7 @@ async function run() {
             res.send(result)
         })
         // get all users in admin dashboard -----------only admin see---------
-        app.get('/allUsers', verifyToken, async (req, res) => {
+        app.get('/allUsers', verifyToken, verifyAdmin, async (req, res) => {
             const page = parseInt(req.query.page);
             const size = parseInt(req.query.size);
             const users = req.body;
@@ -186,7 +211,7 @@ async function run() {
             res.send(result)
         })
         // book parcel and totalSpent update in user collection*******************
-        app.patch('/updateUser', async (req, res) => {
+        app.patch('/updateUser', verifyToken, async (req, res) => {
             const parcel = req.body;
             const query = { email: parcel.email }
             const updatedDoc = {
@@ -196,7 +221,7 @@ async function run() {
             res.send(result)
         })
         // make delivery men -----------------only admin ---
-        app.patch('/makeDeliverymen/:id', async (req, res) => {
+        app.patch('/makeDeliverymen/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const updatedDoc = {
@@ -206,7 +231,7 @@ async function run() {
             res.send(result)
         })
         // make admin  -----------------only admin ---
-        app.patch('/makeAdmin/:id', async (req, res) => {
+        app.patch('/makeAdmin/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const updatedDoc = {
@@ -217,13 +242,13 @@ async function run() {
         })
 
         // submit review -----------------only user-------
-        app.post('/review', async (req, res) => {
+        app.post('/review', verifyToken, async (req, res) => {
             const review = req.body;
             const result = await reviewCollection.insertOne(review);
             res.send(result);
         })
         // payment intent--------------------
-        app.post('/create-payment-intent', async (req, res) => {
+        app.post('/create-payment-intent', verifyToken, async (req, res) => {
             const { parcelPrice } = req.body
             const amount = parseInt(parcelPrice * 100)
             console.log(amount)
@@ -242,33 +267,35 @@ async function run() {
             res.send({ count })
         })
         // average review for all deliverymen------------------only admin
-        app.patch('/average-review/:id', async (req, res) => {
+        app.put('/average-review/:id', verifyToken, async (req, res) => {
             const id = req.params.id;
+            console.log(id);
             const query = { _id: new ObjectId(id) };
             console.log(query);
-            const rating = req.body;
+            const rating = req.body.rating;
             console.log(rating);
             const updatedDoc = {
-                $inc: { ratingNumber: 1, totalRating: { rating } }
+                $inc: { ratingNumber: 1, totalRating: rating }
             }
-            const result = await userCollection.updateOne(query, updatedDoc)
+            const result = await userCollection.updateOne(query, updatedDoc, { upsert: true })
             console.log(result);
             res.send(result)
         })
 
+
         // $$$$$$$$$$$$$$$$$$$$$$$delivery men$$$$$$$$$$$$$$$$$$$$
         // my delivery list ----------------only delivery men see
-        app.get('/myDeliveryList/:email', async (req, res) => {
+        app.get('/myDeliveryList/:email', verifyToken, verifyDeliverymen, async (req, res) => {
             const email = req.params.email;
             const query = { email: email };
             const user = await userCollection.findOne(query);
             const stringId = new ObjectId(user?._id).toString()
-            const exist = { deliverymenId: stringId, status: 'On The Way' }
+            const exist = { deliverymenId: stringId }
             const result = await bookingParcelsCollection.find(exist).toArray();
             res.send(result);
         })
         //  update status delivered from deliverymen--------------------only deliverymen see--
-        app.patch('/updateDeliver/:id', async (req, res) => {
+        app.patch('/updateDeliver/:id', verifyToken, verifyDeliverymen, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const updatedDoc = {
@@ -280,7 +307,7 @@ async function run() {
             res.send(result);
         })
         // number of delivered count---------------only deliverymen
-        app.patch('/numDelivered/:email', async (req, res) => {
+        app.patch('/numDelivered/:email', verifyToken, verifyDeliverymen, async (req, res) => {
             const email = req.params.email;
             const query = { email: email };
             const updatedDoc = {
@@ -291,7 +318,7 @@ async function run() {
             res.send(result);
         })
         //  update status canceled from deliverymen--------------------only deliverymen see--
-        app.patch('/cancelParcel/:id', async (req, res) => {
+        app.patch('/cancelParcel/:id', verifyToken, verifyDeliverymen, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const updatedDoc = {
@@ -303,7 +330,7 @@ async function run() {
             res.send(result);
         })
         // my review -------------------only delivery men
-        app.get('/myReview/:email', async (req, res) => {
+        app.get('/myReview/:email', verifyToken, verifyDeliverymen, async (req, res) => {
             const email = req.params.email;
             const query = { email: email };
             const user = await userCollection.findOne(query);
@@ -326,41 +353,36 @@ async function run() {
         // top deliverymen------------------------
         app.get('/top-deliverymen', async (req, res) => {
             const deliveryMen = await userCollection.find({ role: 'deliverymen' }).toArray();
-
-            // Fetch all reviews
-            const reviews = await reviewCollection.find({}).toArray();
-            console.log(reviews);
-            // Map to store delivery men data
-            const deliveryMenData = deliveryMen.map(deliveryMan => {
-                const deliveryManReviews = reviews.filter(review => review.deliverymenId === deliveryMan._id.toString());
-                const parcelDelivered = deliveryManReviews.length;
-                const averageRating = deliveryManReviews.reduce((sum, review) => sum + review.rating, 0) 
-                return {
-                    _id: deliveryMan._id,
-                    name: deliveryMan.name,
-                    image: deliveryMan.image,
-                    parcelDelivered,
-                    averageRating
-                };
-            });
-
-            // Sort and limit the result
-            const topDeliveryMen = deliveryMenData
-                .sort((a, b) => {
-                    if (b.parcelDelivered === a.parcelDelivered) {
-                        return b.averageRating - a.averageRating;
+            // console.log(deliveryMen);
+            const deliverymenData = deliveryMen.map(man => {
+                if (man?.totalRating && man?.ratingNumber) {
+                    const averageRating = (man?.totalRating / man?.ratingNumber).toFixed();
+                    console.log(man.totalRating, man.ratingNumber);
+                    return {
+                        name: man.name,
+                        image: man.image,
+                        parcelDelivered: man.parcelDelivered,
+                        averageRating
                     }
-                    return b.parcelDelivered - a.parcelDelivered;
-                })
-                .slice(0, 3);
+                }
 
-            res.send(topDeliveryMen);
+            })
+            const topDeliveryMen = deliverymenData.sort((a, b) => {
+                if (b.parcelDelivered === a.parcelDelivered) {
+                    return b.averageRating - a.averageRating;
+                }
+                return b.parcelDelivered - a.parcelDelivered;
+            }).slice(0, 3);
+            res.send(topDeliveryMen)
+            console.log(topDeliveryMen);
         })
+
+       
 
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        //await client.db("admin").command({ ping: 1 });
+        //console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
         //await client.close();
