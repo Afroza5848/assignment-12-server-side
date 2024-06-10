@@ -160,7 +160,7 @@ async function run() {
             const query = { _id: new ObjectId(id) };
             const status = req.body;
             const updatedDoc = {
-                $set: { status: 'canceled' }
+                $set: { status: 'Canceled' }
             }
             const result = await bookingParcelsCollection.updateOne(query, updatedDoc);
             res.send(result)
